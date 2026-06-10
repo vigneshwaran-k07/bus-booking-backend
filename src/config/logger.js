@@ -2,9 +2,6 @@ const { createLogger, format, transports } = require('winston');
 const path = require('path');
 const fs = require('fs');
 
-const logsDir = path.resolve(process.cwd(), 'logs');
-if (!fs.existsSync(logsDir)) fs.mkdirSync(logsDir, { recursive: true });
-
 const { combine, timestamp, errors, json, colorize, printf } = format;
 
 const consoleFormat = combine(
@@ -17,27 +14,27 @@ const consoleFormat = combine(
   )
 );
 
-const fileFormat = combine(
-  timestamp({ format: 'YYYY-MM-DD HH:mm:ss' }),
-  errors({ stack: true }),
-  json()
-);
+const activeTransports = [new transports.Console({ format: consoleFormat })];
 
-const logger = createLogger({
-  level: process.env.LOG_LEVEL || 'info',
-  transports: [
-    new transports.Console({ format: consoleFormat }),
+// File transports are only used locally — Vercel's filesystem is read-only
+if (!process.env.VERCEL) {
+  const logsDir = path.resolve(process.cwd(), 'logs');
+  if (!fs.existsSync(logsDir)) fs.mkdirSync(logsDir, { recursive: true });
 
-    // All levels → logs/combined.log
+  const fileFormat = combine(
+    timestamp({ format: 'YYYY-MM-DD HH:mm:ss' }),
+    errors({ stack: true }),
+    json()
+  );
+
+  activeTransports.push(
     new transports.File({
       filename: path.join(logsDir, 'combined.log'),
       format: fileFormat,
-      maxsize: 5 * 1024 * 1024, // 5 MB
+      maxsize: 5 * 1024 * 1024,
       maxFiles: 5,
       tailable: true,
     }),
-
-    // Errors only → logs/error.log
     new transports.File({
       filename: path.join(logsDir, 'error.log'),
       level: 'error',
@@ -45,8 +42,13 @@ const logger = createLogger({
       maxsize: 5 * 1024 * 1024,
       maxFiles: 5,
       tailable: true,
-    }),
-  ],
+    })
+  );
+}
+
+const logger = createLogger({
+  level: process.env.LOG_LEVEL || 'info',
+  transports: activeTransports,
 });
 
 module.exports = logger;
