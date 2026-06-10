@@ -30,15 +30,18 @@ app.use((_req, res) => {
 
 app.use(errorHandler);
 
-const start = async () => {
-  try {
-    await pool.query('SELECT 1');
-    logger.info('PostgreSQL connected');
-    app.listen(PORT, () => logger.info(`Server running on port ${PORT}`));
-  } catch (err) {
-    logger.error('Failed to connect to PostgreSQL', { message: err.message, stack: err.stack });
-    process.exit(1);
-  }
-};
+if (process.env.VERCEL !== '1') {
+  const start = async () => {
+    try {
+      await pool.query('SELECT 1');
+      logger.info('PostgreSQL connected');
+      app.listen(PORT, () => logger.info(`Server running on port ${PORT}`));
+    } catch (err) {
+      logger.error('Failed to connect to PostgreSQL', { message: err.message, stack: err.stack });
+      process.exit(1);
+    }
+  };
+  start();
+}
 
-start();
+module.exports = app;
