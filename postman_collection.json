@@ -1,0 +1,332 @@
+{
+  "info": {
+    "name": "Bus Ticketing API",
+    "_postman_id": "bus-ticketing-api-v2",
+    "description": "# Bus Ticketing API\n\n**1 bus · 40 seats · one ticket per seat**\n\n## Quick-start\n1. Make sure the backend is running (`npm run dev` in the `backend/` folder).\n2. Set the `base_url` collection variable to `http://localhost:3000` (or your EC2 public IP).\n3. Set `admin_secret` to the value of `ADMIN_SECRET` in your `.env` file.\n4. Run **Seed / Health Check** first to confirm the server is live.\n5. Work through the folders in order: **Tickets → Admin**.\n\n## Variable reference\n| Variable | Default | Purpose |\n|---|---|---|\n| `base_url` | `http://localhost:3000` | Server root |\n| `admin_secret` | `vicky7512` | Required by the reset endpoint |\n| `ticket_id` | `5` | Seat ID used in single-ticket requests |\n\n## Response envelope\nEvery response follows the same shape:\n```json\n{ \"success\": true, \"data\": { ... }, \"message\": \"...\" }\n```\nOn error `success` is `false` and `data` is `null`. In development mode a `detail` field with the raw database message is also included.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    { "key": "base_url",      "value": "http://localhost:3000", "type": "string" },
+    { "key": "admin_secret",  "value": "vicky7512",            "type": "string" },
+    { "key": "ticket_id",     "value": "5",                    "type": "string" }
+  ],
+  "item": [
+
+    {
+      "name": "Health Check",
+      "request": {
+        "method": "GET",
+        "url": { "raw": "{{base_url}}/health", "host": ["{{base_url}}"], "path": ["health"] },
+        "description": "## Health Check\n\nCall this first to confirm the server is up and connected to PostgreSQL.\n\n**Expected:** `200 OK` with `message: \"Server is healthy\"`.\n\nIf you get a connection error, check:\n- `npm run dev` is running in the `backend/` folder\n- `.env` has the correct `DB_HOST`, `DB_PORT`, `DB_USER`, `DB_PASSWORD`, `DB_NAME`"
+      },
+      "response": [
+        {
+          "name": "200 — Server is healthy",
+          "status": "OK", "code": 200,
+          "_postman_previewlanguage": "json",
+          "header": [{ "key": "Content-Type", "value": "application/json" }],
+          "body": "{\n  \"success\": true,\n  \"data\": null,\n  \"message\": \"Server is healthy\"\n}"
+        }
+      ]
+    },
+
+    {
+      "name": "Tickets",
+      "description": "All ticket-related endpoints.\n\nThe PATCH endpoint handles three distinct operations depending on what you send:\n- **Book** — `status: closed` + passenger fields (creates a reservation)\n- **Update** — `status: closed` + changed passenger fields (edits an existing reservation)\n- **Cancel** — `status: open` only (frees the seat)",
+      "item": [
+
+        {
+          "name": "GET All Tickets",
+          "request": {
+            "method": "GET",
+            "url": { "raw": "{{base_url}}/api/tickets", "host": ["{{base_url}}"], "path": ["api","tickets"] },
+            "description": "## GET /api/tickets\n\nReturns all **40 tickets** ordered by `seat_number` ascending.\n\nEach ticket includes:\n| Field | Type | Notes |\n|---|---|---|\n| `id` | integer | Primary key |\n| `seat_number` | integer | 1 – 40 |\n| `status` | string | `open` or `closed` |\n| `first_name` | string \\| null | Null when open |\n| `last_name` | string \\| null | Null when open |\n| `email` | string \\| null | Null when open |\n| `gender` | string \\| null | `male` or `female`, null when open |\n| `booked_at` | timestamp \\| null | Set on first booking only |\n| `created_at` | timestamp | Row creation time |\n| `updated_at` | timestamp | Last update time |\n\n**Used by the frontend:** Yes — `ReservePage` and `DashboardPage` both call this on mount and after every mutation."
+          },
+          "response": [
+            {
+              "name": "200 — All 40 tickets",
+              "status": "OK", "code": 200,
+              "_postman_previewlanguage": "json",
+              "header": [{ "key": "Content-Type", "value": "application/json" }],
+              "body": "{\n  \"success\": true,\n  \"data\": [\n    {\n      \"id\": 1,\n      \"seat_number\": 1,\n      \"status\": \"open\",\n      \"first_name\": null,\n      \"last_name\": null,\n      \"email\": null,\n      \"gender\": null,\n      \"booked_at\": null,\n      \"created_at\": \"2024-01-01T00:00:00.000Z\",\n      \"updated_at\": \"2024-01-01T00:00:00.000Z\"\n    },\n    {\n      \"id\": 5,\n      \"seat_number\": 5,\n      \"status\": \"closed\",\n      \"first_name\": \"Arjun\",\n      \"last_name\": \"Kumar\",\n      \"email\": \"arjun.kumar@example.com\",\n      \"gender\": \"male\",\n      \"booked_at\": \"2024-06-10T08:30:00.000Z\",\n      \"created_at\": \"2024-01-01T00:00:00.000Z\",\n      \"updated_at\": \"2024-06-10T08:30:00.000Z\"\n    }\n  ],\n  \"message\": \"All tickets retrieved\"\n}"
+            }
+          ]
+        },
+
+        {
+          "name": "GET Open Tickets",
+          "request": {
+            "method": "GET",
+            "url": { "raw": "{{base_url}}/api/tickets/open", "host": ["{{base_url}}"], "path": ["api","tickets","open"] },
+            "description": "## GET /api/tickets/open\n\nReturns only seats with `status = 'open'` — i.e. seats available for booking.\n\n**When to use:** Use this instead of `GET /tickets` when you only need to show available seats and don't want to send booked-seat data over the network (better for large buses or slower connections).\n\n**Used by the frontend:** No — the frontend calls `GET /tickets` and filters client-side. This endpoint is ready to use if you switch to server-side filtering."
+          },
+          "response": [
+            {
+              "name": "200 — Open tickets only",
+              "status": "OK", "code": 200,
+              "_postman_previewlanguage": "json",
+              "header": [{ "key": "Content-Type", "value": "application/json" }],
+              "body": "{\n  \"success\": true,\n  \"data\": [\n    {\n      \"id\": 1,\n      \"seat_number\": 1,\n      \"status\": \"open\",\n      \"first_name\": null,\n      \"last_name\": null,\n      \"email\": null,\n      \"gender\": null,\n      \"booked_at\": null,\n      \"created_at\": \"2024-01-01T00:00:00.000Z\",\n      \"updated_at\": \"2024-01-01T00:00:00.000Z\"\n    },\n    {\n      \"id\": 2,\n      \"seat_number\": 2,\n      \"status\": \"open\",\n      \"first_name\": null,\n      \"last_name\": null,\n      \"email\": null,\n      \"gender\": null,\n      \"booked_at\": null,\n      \"created_at\": \"2024-01-01T00:00:00.000Z\",\n      \"updated_at\": \"2024-01-01T00:00:00.000Z\"\n    }\n  ],\n  \"message\": \"Open tickets retrieved\"\n}"
+            }
+          ]
+        },
+
+        {
+          "name": "GET Closed Tickets",
+          "request": {
+            "method": "GET",
+            "url": { "raw": "{{base_url}}/api/tickets/closed", "host": ["{{base_url}}"], "path": ["api","tickets","closed"] },
+            "description": "## GET /api/tickets/closed\n\nReturns only seats with `status = 'closed'` — i.e. all booked seats with passenger details.\n\n**When to use:** Use this for a passenger manifest or a report of all bookings without fetching the empty seats too.\n\n**Used by the frontend:** No — the frontend calls `GET /tickets` and filters to `status === 'closed'` in `DashboardPage`. Could be switched to this endpoint to reduce payload size."
+          },
+          "response": [
+            {
+              "name": "200 — Closed tickets only",
+              "status": "OK", "code": 200,
+              "_postman_previewlanguage": "json",
+              "header": [{ "key": "Content-Type", "value": "application/json" }],
+              "body": "{\n  \"success\": true,\n  \"data\": [\n    {\n      \"id\": 5,\n      \"seat_number\": 5,\n      \"status\": \"closed\",\n      \"first_name\": \"Arjun\",\n      \"last_name\": \"Kumar\",\n      \"email\": \"arjun.kumar@example.com\",\n      \"gender\": \"male\",\n      \"booked_at\": \"2024-06-10T08:30:00.000Z\",\n      \"created_at\": \"2024-01-01T00:00:00.000Z\",\n      \"updated_at\": \"2024-06-10T08:30:00.000Z\"\n    },\n    {\n      \"id\": 8,\n      \"seat_number\": 8,\n      \"status\": \"closed\",\n      \"first_name\": \"Priya\",\n      \"last_name\": \"Sharma\",\n      \"email\": \"priya.sharma@example.com\",\n      \"gender\": \"female\",\n      \"booked_at\": \"2024-06-10T09:15:00.000Z\",\n      \"created_at\": \"2024-01-01T00:00:00.000Z\",\n      \"updated_at\": \"2024-06-10T09:15:00.000Z\"\n    }\n  ],\n  \"message\": \"Closed tickets retrieved\"\n}"
+            },
+            {
+              "name": "200 — No bookings yet",
+              "status": "OK", "code": 200,
+              "_postman_previewlanguage": "json",
+              "header": [{ "key": "Content-Type", "value": "application/json" }],
+              "body": "{\n  \"success\": true,\n  \"data\": [],\n  \"message\": \"Closed tickets retrieved\"\n}"
+            }
+          ]
+        },
+
+        {
+          "name": "GET Single Ticket",
+          "request": {
+            "method": "GET",
+            "url": { "raw": "{{base_url}}/api/tickets/{{ticket_id}}", "host": ["{{base_url}}"], "path": ["api","tickets","{{ticket_id}}"] },
+            "description": "## GET /api/tickets/:id\n\nFetches a single ticket by its **database ID** (not seat number).\n\n> **Tip:** The `id` and `seat_number` are not the same. Seat #5 typically has `id = 5` after a fresh seed, but if rows were deleted and re-inserted the IDs may differ. Always use the `id` returned by `GET /tickets`.\n\n**Used by the frontend:** No — the frontend works from the full cached list and never needs a single-ticket fetch.\n\n**Useful for:** A kiosk or mobile app that stores the ticket ID and needs to refresh just that one seat's state."
+          },
+          "response": [
+            {
+              "name": "200 — Open ticket",
+              "status": "OK", "code": 200,
+              "_postman_previewlanguage": "json",
+              "header": [{ "key": "Content-Type", "value": "application/json" }],
+              "body": "{\n  \"success\": true,\n  \"data\": {\n    \"id\": 5,\n    \"seat_number\": 5,\n    \"status\": \"open\",\n    \"first_name\": null,\n    \"last_name\": null,\n    \"email\": null,\n    \"gender\": null,\n    \"booked_at\": null,\n    \"created_at\": \"2024-01-01T00:00:00.000Z\",\n    \"updated_at\": \"2024-01-01T00:00:00.000Z\"\n  },\n  \"message\": \"Ticket retrieved\"\n}"
+            },
+            {
+              "name": "200 — Closed ticket",
+              "status": "OK", "code": 200,
+              "_postman_previewlanguage": "json",
+              "header": [{ "key": "Content-Type", "value": "application/json" }],
+              "body": "{\n  \"success\": true,\n  \"data\": {\n    \"id\": 5,\n    \"seat_number\": 5,\n    \"status\": \"closed\",\n    \"first_name\": \"Arjun\",\n    \"last_name\": \"Kumar\",\n    \"email\": \"arjun.kumar@example.com\",\n    \"gender\": \"male\",\n    \"booked_at\": \"2024-06-10T08:30:00.000Z\",\n    \"created_at\": \"2024-01-01T00:00:00.000Z\",\n    \"updated_at\": \"2024-06-10T08:30:00.000Z\"\n  },\n  \"message\": \"Ticket retrieved\"\n}"
+            },
+            {
+              "name": "404 — Ticket not found",
+              "status": "Not Found", "code": 404,
+              "_postman_previewlanguage": "json",
+              "header": [{ "key": "Content-Type", "value": "application/json" }],
+              "body": "{\n  \"success\": false,\n  \"data\": null,\n  \"message\": \"Ticket not found\"\n}"
+            }
+          ]
+        },
+
+        {
+          "name": "GET Ticket Owner",
+          "request": {
+            "method": "GET",
+            "url": { "raw": "{{base_url}}/api/tickets/{{ticket_id}}/owner", "host": ["{{base_url}}"], "path": ["api","tickets","{{ticket_id}}","owner"] },
+            "description": "## GET /api/tickets/:id/owner\n\nReturns only the **passenger details** of a booked seat — no internal DB fields like `created_at` or `updated_at`.\n\nReturns `404` if the seat is open (no owner).\n\n**Used by the frontend:** No — passenger details are already in the full list. Useful for a targeted lookup, e.g. a conductor's app scanning a ticket QR code that contains only the ticket ID."
+          },
+          "response": [
+            {
+              "name": "200 — Owner found",
+              "status": "OK", "code": 200,
+              "_postman_previewlanguage": "json",
+              "header": [{ "key": "Content-Type", "value": "application/json" }],
+              "body": "{\n  \"success\": true,\n  \"data\": {\n    \"first_name\": \"Arjun\",\n    \"last_name\": \"Kumar\",\n    \"email\": \"arjun.kumar@example.com\",\n    \"seat_number\": 5,\n    \"booked_at\": \"2024-06-10T08:30:00.000Z\"\n  },\n  \"message\": \"Ticket owner retrieved\"\n}"
+            },
+            {
+              "name": "404 — Seat is open (no owner)",
+              "status": "Not Found", "code": 404,
+              "_postman_previewlanguage": "json",
+              "header": [{ "key": "Content-Type", "value": "application/json" }],
+              "body": "{\n  \"success\": false,\n  \"data\": null,\n  \"message\": \"Ticket has no owner — seat is open\"\n}"
+            },
+            {
+              "name": "404 — Ticket not found",
+              "status": "Not Found", "code": 404,
+              "_postman_previewlanguage": "json",
+              "header": [{ "key": "Content-Type", "value": "application/json" }],
+              "body": "{\n  \"success\": false,\n  \"data\": null,\n  \"message\": \"Ticket not found\"\n}"
+            }
+          ]
+        },
+
+        {
+          "name": "PATCH Book a Ticket — Male (open → closed)",
+          "request": {
+            "method": "PATCH",
+            "url": { "raw": "{{base_url}}/api/tickets/{{ticket_id}}", "host": ["{{base_url}}"], "path": ["api","tickets","{{ticket_id}}"] },
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"status\": \"closed\",\n  \"first_name\": \"Arjun\",\n  \"last_name\": \"Kumar\",\n  \"email\": \"arjun.kumar@example.com\",\n  \"gender\": \"male\"\n}"
+            },
+            "description": "## PATCH /api/tickets/:id — Book (open → closed)\n\nBooks an **open** seat for a male passenger.\n\n### Required fields\n| Field | Type | Rule |\n|---|---|---|\n| `status` | string | Must be `\"closed\"` |\n| `first_name` | string | Min 1 char |\n| `last_name` | string | Min 1 char |\n| `email` | string | Valid email format |\n| `gender` | string | `\"male\"` or `\"female\"` |\n\n### What happens\n1. `status` is set to `closed`\n2. Passenger fields are saved\n3. `booked_at` is stamped to **now** (only on first booking — not overwritten on edits)\n4. Event `ticket:booked` is emitted → logged to console and `logs/combined.log`\n\n### On the seat map\nSeat turns **blue** (male passenger).\n\n### Error cases\n- `400` if any required field is missing\n- `400` if the seat is already booked (call Cancel first)"
+          },
+          "response": [
+            {
+              "name": "200 — Booked successfully",
+              "status": "OK", "code": 200,
+              "_postman_previewlanguage": "json",
+              "header": [{ "key": "Content-Type", "value": "application/json" }],
+              "body": "{\n  \"success\": true,\n  \"data\": {\n    \"id\": 5,\n    \"seat_number\": 5,\n    \"status\": \"closed\",\n    \"first_name\": \"Arjun\",\n    \"last_name\": \"Kumar\",\n    \"email\": \"arjun.kumar@example.com\",\n    \"gender\": \"male\",\n    \"booked_at\": \"2024-06-10T08:30:00.000Z\",\n    \"created_at\": \"2024-01-01T00:00:00.000Z\",\n    \"updated_at\": \"2024-06-10T08:30:00.000Z\"\n  },\n  \"message\": \"Ticket booked successfully\"\n}"
+            },
+            {
+              "name": "400 — Missing required fields",
+              "status": "Bad Request", "code": 400,
+              "_postman_previewlanguage": "json",
+              "header": [{ "key": "Content-Type", "value": "application/json" }],
+              "body": "{\n  \"success\": false,\n  \"data\": null,\n  \"message\": \"first_name, last_name, email, and gender are required\"\n}"
+            },
+            {
+              "name": "400 — Invalid gender value",
+              "status": "Bad Request", "code": 400,
+              "_postman_previewlanguage": "json",
+              "header": [{ "key": "Content-Type", "value": "application/json" }],
+              "body": "{\n  \"success\": false,\n  \"data\": null,\n  \"message\": \"\\\"gender\\\" must be \\\"male\\\" or \\\"female\\\"\"\n}"
+            },
+            {
+              "name": "400 — Invalid email format",
+              "status": "Bad Request", "code": 400,
+              "_postman_previewlanguage": "json",
+              "header": [{ "key": "Content-Type", "value": "application/json" }],
+              "body": "{\n  \"success\": false,\n  \"data\": null,\n  \"message\": \"Invalid email format\"\n}"
+            }
+          ]
+        },
+
+        {
+          "name": "PATCH Book a Ticket — Female (open → closed)",
+          "request": {
+            "method": "PATCH",
+            "url": { "raw": "{{base_url}}/api/tickets/{{ticket_id}}", "host": ["{{base_url}}"], "path": ["api","tickets","{{ticket_id}}"] },
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"status\": \"closed\",\n  \"first_name\": \"Priya\",\n  \"last_name\": \"Sharma\",\n  \"email\": \"priya.sharma@example.com\",\n  \"gender\": \"female\"\n}"
+            },
+            "description": "## PATCH /api/tickets/:id — Book (open → closed) for Female\n\nSame endpoint as the male booking — only `gender` differs.\n\n### On the seat map\nSeat turns **pink** (female passenger).\n\n> **Tip:** Change `ticket_id` in the collection variables to target a different seat (e.g. `8` for seat #8)."
+          },
+          "response": [
+            {
+              "name": "200 — Booked successfully (female)",
+              "status": "OK", "code": 200,
+              "_postman_previewlanguage": "json",
+              "header": [{ "key": "Content-Type", "value": "application/json" }],
+              "body": "{\n  \"success\": true,\n  \"data\": {\n    \"id\": 8,\n    \"seat_number\": 8,\n    \"status\": \"closed\",\n    \"first_name\": \"Priya\",\n    \"last_name\": \"Sharma\",\n    \"email\": \"priya.sharma@example.com\",\n    \"gender\": \"female\",\n    \"booked_at\": \"2024-06-10T09:15:00.000Z\",\n    \"created_at\": \"2024-01-01T00:00:00.000Z\",\n    \"updated_at\": \"2024-06-10T09:15:00.000Z\"\n  },\n  \"message\": \"Ticket booked successfully\"\n}"
+            }
+          ]
+        },
+
+        {
+          "name": "PATCH Update Passenger Details (closed → closed)",
+          "request": {
+            "method": "PATCH",
+            "url": { "raw": "{{base_url}}/api/tickets/{{ticket_id}}", "host": ["{{base_url}}"], "path": ["api","tickets","{{ticket_id}}"] },
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"status\": \"closed\",\n  \"first_name\": \"Arjun\",\n  \"last_name\": \"Kumar\",\n  \"email\": \"arjun.new@example.com\",\n  \"gender\": \"male\"\n}"
+            },
+            "description": "## PATCH /api/tickets/:id — Update passenger details (closed → closed)\n\nEdits the passenger details of an **already booked** seat without cancelling and re-booking.\n\n### Key behaviour\n- `status` must still be `\"closed\"` even though the seat is already closed\n- All passenger fields must be sent (even unchanged ones)\n- `booked_at` is **not** overwritten — the original booking timestamp is preserved\n- No event is emitted for detail-only edits (only for open↔closed transitions)\n\n### Used by the frontend\nYes — the Dashboard **Edit** button calls this via `useUpdatePassenger` → `PATCH /tickets/:id`."
+          },
+          "response": [
+            {
+              "name": "200 — Details updated",
+              "status": "OK", "code": 200,
+              "_postman_previewlanguage": "json",
+              "header": [{ "key": "Content-Type", "value": "application/json" }],
+              "body": "{\n  \"success\": true,\n  \"data\": {\n    \"id\": 5,\n    \"seat_number\": 5,\n    \"status\": \"closed\",\n    \"first_name\": \"Arjun\",\n    \"last_name\": \"Kumar\",\n    \"email\": \"arjun.new@example.com\",\n    \"gender\": \"male\",\n    \"booked_at\": \"2024-06-10T08:30:00.000Z\",\n    \"created_at\": \"2024-01-01T00:00:00.000Z\",\n    \"updated_at\": \"2024-06-10T10:00:00.000Z\"\n  },\n  \"message\": \"Ticket updated successfully\"\n}"
+            }
+          ]
+        },
+
+        {
+          "name": "PATCH Cancel a Ticket (closed → open)",
+          "request": {
+            "method": "PATCH",
+            "url": { "raw": "{{base_url}}/api/tickets/{{ticket_id}}", "host": ["{{base_url}}"], "path": ["api","tickets","{{ticket_id}}"] },
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"status\": \"open\"\n}"
+            },
+            "description": "## PATCH /api/tickets/:id — Cancel (closed → open)\n\nFrees a booked seat. All passenger fields (`first_name`, `last_name`, `email`, `gender`, `booked_at`) are set to `NULL` automatically by the server — you only need to send `status: open`.\n\n### What happens\n1. `status` → `open`\n2. All passenger fields → `NULL`\n3. `booked_at` → `NULL`\n4. Event `ticket:cancelled` is emitted → logged to console and `logs/combined.log`\n\n### On the seat map\nSeat turns **green** (available).\n\n### Used by the frontend\nYes — the Dashboard **Delete** button calls this via `useCancelTicket` → `PATCH /tickets/:id` with `{ status: 'open' }`.\n\n### Error case\n- `400` if the seat is already open"
+          },
+          "response": [
+            {
+              "name": "200 — Cancelled successfully",
+              "status": "OK", "code": 200,
+              "_postman_previewlanguage": "json",
+              "header": [{ "key": "Content-Type", "value": "application/json" }],
+              "body": "{\n  \"success\": true,\n  \"data\": {\n    \"id\": 5,\n    \"seat_number\": 5,\n    \"status\": \"open\",\n    \"first_name\": null,\n    \"last_name\": null,\n    \"email\": null,\n    \"gender\": null,\n    \"booked_at\": null,\n    \"created_at\": \"2024-01-01T00:00:00.000Z\",\n    \"updated_at\": \"2024-06-10T11:00:00.000Z\"\n  },\n  \"message\": \"Ticket cancelled successfully\"\n}"
+            },
+            {
+              "name": "400 — Seat already open",
+              "status": "Bad Request", "code": 400,
+              "_postman_previewlanguage": "json",
+              "header": [{ "key": "Content-Type", "value": "application/json" }],
+              "body": "{\n  \"success\": false,\n  \"data\": null,\n  \"message\": \"Seat is already open\"\n}"
+            }
+          ]
+        }
+
+      ]
+    },
+
+    {
+      "name": "Admin",
+      "description": "Admin-only endpoints. Protected by the `ADMIN_SECRET` value from your `.env` file.\n\n> **Never expose the admin secret in client-side code.** These requests should only be made from Postman or a trusted server-side process.",
+      "item": [
+
+        {
+          "name": "POST Reset All Tickets",
+          "request": {
+            "method": "POST",
+            "url": { "raw": "{{base_url}}/api/admin/reset", "host": ["{{base_url}}"], "path": ["api","admin","reset"] },
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"secret\": \"{{admin_secret}}\"\n}"
+            },
+            "description": "## POST /api/admin/reset\n\nResets **all 40 tickets** to open status in a single operation. Clears every passenger record.\n\n### Authentication\nSend `secret` in the request body matching `ADMIN_SECRET` in your `.env`.\n\n### What happens\n1. All 40 rows: `status → open`, all passenger fields → `NULL`\n2. Event `admin:reset` is emitted → logged to console and `logs/combined.log`\n\n### When to use\n- Between trips (bus departs, next journey begins)\n- During development/testing to clear test bookings quickly\n- As a scheduled nightly job via a cron script\n\n### Used by the frontend\nNo — currently Postman-only. The frontend has no admin UI. To add one: call `POST /api/admin/reset` from a secured admin page, prompt for the secret, and call `useResetTickets` mutation.\n\n### Error cases\n- `401` if `secret` is missing or wrong\n\n> **Warning:** This deletes all passenger data permanently. There is no undo."
+          },
+          "response": [
+            {
+              "name": "200 — All tickets reset",
+              "status": "OK", "code": 200,
+              "_postman_previewlanguage": "json",
+              "header": [{ "key": "Content-Type", "value": "application/json" }],
+              "body": "{\n  \"success\": true,\n  \"data\": {\n    \"reset_count\": 40\n  },\n  \"message\": \"All tickets have been reset to open\"\n}"
+            },
+            {
+              "name": "401 — Wrong secret",
+              "status": "Unauthorized", "code": 401,
+              "_postman_previewlanguage": "json",
+              "header": [{ "key": "Content-Type", "value": "application/json" }],
+              "body": "{\n  \"success\": false,\n  \"data\": null,\n  \"message\": \"Unauthorized — invalid admin secret\"\n}"
+            },
+            {
+              "name": "401 — Secret missing",
+              "status": "Unauthorized", "code": 401,
+              "_postman_previewlanguage": "json",
+              "header": [{ "key": "Content-Type", "value": "application/json" }],
+              "body": "{\n  \"success\": false,\n  \"data\": null,\n  \"message\": \"Unauthorized — invalid admin secret\"\n}"
+            }
+          ]
+        }
+
+      ]
+    }
+
+  ]
+}
